@@ -1,0 +1,30 @@
+
+Messageboard research toolkit
+
+------------------------------
+
+ARCHIVING
+
+ getthread.sh URL [target dir]
+
+ * Duplicates the latest version of
+   the thread found at URL
+ * Default target dir is ./ 
+
+LIMITATIONS
+
+ * Limited to vBulletin boards
+
+------------------------------
+
+For more information, contact:
+  
+  Kevin Driscoll
+  kedrisco@usc.edu
+
+------------------------------
+
+Last update:
+
+ 5 June 2010
+
