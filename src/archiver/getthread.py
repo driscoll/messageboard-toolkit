@@ -33,12 +33,11 @@ def usage():
     print "Usage: getthread.py [-u] THREAD_URL [TARGET_DIR]"
     print
 
-def main(argv):                         
-   
+def main(argv):
     # Init global variables 
-	_verbose = 0
-	_debug = 0
-	_utc = 0
+    _verbose = 0
+    _debug = 0
+    _utc = 0
     _localdir = '.'
     _logfile = ''
     # wget uses _platform for escaping illegal chrs in filenames
@@ -46,19 +45,20 @@ def main(argv):
         _platform = "windows"
     else:
         _platform = "unix"
-    
+
     # _useragent = "HTTP_USER_AGENT:Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.0.17) Gecko/2010010604 Ubuntu/9.04 (jaunty) Firefox/3.0.17"
-    	
+        
     # Check the commandline for arguments
     try:                                
         opts, args = getopt.getopt(argv, "dhl:uvw", ["debug", "help", "localdir=", "utc", "verbose", "windows"])
     except getopt.GetoptError:
         # Found a flag not in our known list
         # Returning a short usage message ...
+        print "getthread.py: unrecognized flag"
         usage()
         # ... and bye-bye! 
         sys.exit(2)
-	
+  
     # Evaluate commandline options, arguments
     for opt, arg in opts:
         if opt in ("-h", "--help"):
@@ -73,13 +73,20 @@ def main(argv):
         elif opt in ("-l", "--localdir"):
             # TODO need to validate the directory
             # strip trailing slashes
-            _localdir = arg.strip('/')
+            _localdir = arg.rstrip('/')
         elif opt in ("-w", "--windows"):
             _platform = "windows"
+        else:
+            print "opt: %s, arg: %s" % (opt, arg)
 
     # Should be exactly 1 positional argument
     # URL to the thread should be the only argument 
-    raw_URL = args[0]
+    try:
+        raw_URL = args[0]
+    except IndexError:
+        print "getthread.py: missing URL"
+        usage()
+        sys.exit(2)
 
     # Is raw_URL a valid vB thread URL?
     # TODO This is janky verification but it's a start
@@ -107,7 +114,7 @@ def main(argv):
     response = urllib2.urlopen(url)
     html = response.read()
  
-	# Locate contents of title
+    # Locate contents of title
     # Split the resulting string by -
     #   TODO this should be templated 
     title = re.sub(r'[^a-zA-Z0-9-]',r'_',
@@ -119,23 +126,23 @@ def main(argv):
     print "Discovering forum name ..."
     forum = title.pop().strip('_')
     print "Forum name: %s" % forum
-	
+    
     # Locate thread title and generate slug to use in filenames
-	# * Concat 32 chars
-	# * Trim trailing spaces
-	# * Convert non-alphanumeric to underscores
-	# * Convert all alpha to lowercase
-	# e.g. 
-	#   <title> Israel raids ships carrying aid to Gaza, killings civilians - Page 25 - EXTREMESKINS.com</title>
-	# becomes
-	#   israel_raids_ships_carrying_aid
-	print "Generating nickname for this thread from title..."
+    # * Concat 32 chars
+    # * Trim trailing spaces
+    # * Convert non-alphanumeric to underscores
+    # * Convert all alpha to lowercase
+    # e.g. 
+    #   <title> Israel raids ships carrying aid to Gaza, killings civilians - Page 25 - EXTREMESKINS.com</title>
+    # becomes
+    #   israel_raids_ships_carrying_aid
+    print "Generating nickname for this thread from title..."
     slug = ''
-	for t in title:
-	    slug += t.strip('_') + '_'
+    for t in title:
+        slug += t.strip('_') + '_'
     # Trim the slug down to 32 chars
     slug = slug[0:32].strip('_')    
-	print "Thread nickname: %s" % slug
+    print "Thread nickname: %s" % slug
 
     # Discover if this thread is multi-page
     print "Checking length of %s ..." % slug
@@ -173,15 +180,15 @@ def main(argv):
     # For subsequent archives will append to this logfile
     _logfile = _localdir + '/' + forum + '/' + slug + '.log'
 
-	# Count up the subdirs in this URL
-	#   Sometimes vBulletin is installed in root
-	#   Sometimes it is in a subdir
-	# We need to know this number so we can tell wget to chill later
+    # Count up the subdirs in this URL
+    #   Sometimes vBulletin is installed in root
+    #   Sometimes it is in a subdir
+    # We need to know this number so we can tell wget to chill later
     subdirs = (url.count('/') - 3)
     print "Found %s sub-dir in the URL ..." % subdirs
 
     print "Downloading first page of the thread ..."
-    wget_cmd = 'wget -v -nH --cut-dirs=%s -k -K -E -H -p -P %s -S -a %s --restrict-file-names=%s -w 1 --random-wait --no-cache --no-cookies "%s"' % (subdirs, newdir, _logfile, _platform, url)
+    wget_cmd = "wget -v -nH --cut-dirs=%s -k -K -E -H -p -P %s -S -a %s --restrict-file-names=%s -w 1 --random-wait --no-cache --no-cookies \"%s\"" % (subdirs, newdir, _logfile, _platform, url)
     args = shlex.split(wget_cmd)
     # subprocess.Popen() will start a subprocess
     # TODO This would be better with a single data structure
@@ -193,14 +200,18 @@ def main(argv):
     proc_firstpage.communicate()
     print "Download complete!"
 
+
+# TODO TEST MULTI PAGE
+
+
     if (maxpages > 1):
-	    # This is a multi-page thread!
-	    
-	    # Fix links in the downloaded page to
+        # This is a multi-page thread!
+        
+        # Fix links in the downloaded page to
         #   point to pages in the local dir
         #   (departing from typical wget behavior)
         # Note: filename is a tuple (name, extension) 
-        if (_platform == windows):
+        if (_platform == "windows"):
             # wget escapes chrs diff on win32
             filename = (url.split('/').pop().replace('?','@'), '.html')
         else:
@@ -249,7 +260,7 @@ def main(argv):
         for page in range(2, (maxpages + 1)): 
 
             print "Downloading page %s of %s ..." % (page, maxpages)
-            wget_cmd = 'wget -v -nH --cut-dirs=%s -k -K -E -H -p -P %s -N -a %s --restrict-file-names=%s -w 1 --random-wait --no-cache --no-cookies "%s&page=%s"' % (subdirs newdir, _logfile, _platform, url, page)
+            wget_cmd = "wget -v -nH --cut-dirs=%s -k -K -E -H -p -P %s -N -a %s --restrict-file-names=%s -w 1 --random-wait --no-cache --no-cookies \"%s&page=%s\"" % (subdirs, newdir, _logfile, _platform, url, page)
             args = shlex.split(wget_cmd)
             # subprocess.Popen() will start a subprocess
             # TODO Need process stack structure (see above)
@@ -260,38 +271,44 @@ def main(argv):
             proc_nextpage.communicate()
             print "Download complete!"
 
-	        # Using with syntax automatically closes the fileobjects
-	        # Earlier than Python 2.6, requires import
+            # Using with syntax automatically closes the fileobjects
+            # Earlier than Python 2.6, requires import
             # TODO template this suffix
             # TODO clean up these variable names, confusing
-	        nextfilename = filename[0] + '&page=' + page + filename[1]
+            nextfilename = filename[0] + '&page=' + page + filename[1]
             print "Transforming multi-page links in %s" % (newdir+nextfilename)
             tempfilename = '.' + nextfilename + '.tmp'
-	        with open((newdir+tempfilename),'w') as temppage:
-	            with open((newdir+nextfilename),'r') as firstpage:
-	                for line in firstpage:
-	                    pattern = r'http://.*showthread.*t=%s.*page=([0-9]*)[^\'"]*' % id
-	                    # Remember: filename is a tuple...
-	                    #   which is why it can match both %s
+            with open((newdir+tempfilename),'w') as temppage:
+                with open((newdir+nextfilename),'r') as firstpage:
+                    for line in firstpage:
+                        pattern = r'http://.*showthread.*t=%s.*page=([0-9]*)[^\'"]*' % id
+                        # Remember: filename is a tuple...
+                        #   which is why it can match both %s
                         # TODO Is this confusing?
-	                    substitute = r'%s&page=\1%s' % filename
-	                    # Write altered HTML to a temporary file
-	                    temppage.write(pattern, substitute, line)
-	        # Overwrite the temporary file with the new one
-	        # wget created an unchanged version .orig
-	        os.rename(newdir+tempfilename, newdir+nextfilename)
+                        substitute = r'%s&page=\1%s' % filename
+                        # Write altered HTML to a temporary file
+                        temppage.write(pattern, substitute, line)
+            # Overwrite the temporary file with the new one
+            # wget created an unchanged version .orig
+            os.rename(newdir+tempfilename, newdir+nextfilename)
 
-	print "See %s for details." % _logfile
-	print
-	print "Goodbye."
-	print
+    print "See %s for details." % _logfile
+    print
+    print "Goodbye."
+    print
 
 
 
 
 if __name__ == "__main__":
-    # sys.argv[0] is the name of this script
-    # sys.argv[1:] is everything else on the commandline
-    main(sys.argv[1:])
+    if len(sys.argv) < 2:
+        print len(sys.argv)
+        print "%s: missing URL" % sys.argv[0]
+        usage()
+        sys.exit(2)
+    else:
+        # sys.argv[0] is the name of this script
+        # sys.argv[1:] is everything else on the commandline
+        main(sys.argv[1:])
 
 
