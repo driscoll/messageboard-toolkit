@@ -3,7 +3,8 @@
 # Thread archiver 
 # for vBulletin messageboards
 #
-# (c) Kevin Driscoll, kedrisco@usc.edu
+# (Pd) Kevin Driscoll, kedrisco@usc.edu
+# http://creativecommons.org/licenses/publicdomain
 #
 # Last changed: 5 June 2010
 #
