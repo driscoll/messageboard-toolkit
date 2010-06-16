@@ -311,12 +311,8 @@ def main(argv):
     print "Goodbye."
     print
 
-
-
-
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print len(sys.argv)
         print "%s: missing URL" % sys.argv[0]
         usage()
         sys.exit(2)
