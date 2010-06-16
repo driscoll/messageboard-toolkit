@@ -152,7 +152,7 @@ def main(argv):
     if (m == None):
         maxpages = 1
     else:
-        maxpages = m.group(1).strip()
+        maxpages = int(m.group(1).strip())
     print "Found %s page(s) of posts." % maxpages
 
     # Create sub-dir with human-readable date-time, 
@@ -251,7 +251,7 @@ def main(argv):
                     temppage.write(re.sub(pattern, substitute, line))
         # Overwrite the temporary file with the new one
         # wget created an unchanged version .orig
-        os.rename(newdir+tempfilename, newdir+filename[0]+filename[1])
+        os.rename(newdir + '/' +tempfilename, newdir + '/' +filename[0]+filename[1])
 
         # Now loop through the remaining pages
         # and download them to the same dir.
@@ -275,22 +275,24 @@ def main(argv):
             # Earlier than Python 2.6, requires import
             # TODO template this suffix
             # TODO clean up these variable names, confusing
-            nextfilename = filename[0] + '&page=' + page + filename[1]
-            print "Transforming multi-page links in %s" % (newdir+nextfilename)
+            nextfilename = filename[0] + '&page=' + str(page) + filename[1]
+            print "Transforming multi-page links in %s" % (newdir + '/' + nextfilename)
             tempfilename = '.' + nextfilename + '.tmp'
-            with open((newdir+tempfilename),'w') as temppage:
-                with open((newdir+nextfilename),'r') as firstpage:
+            with open((newdir + '/' +tempfilename),'w') as temppage:
+                with open((newdir + '/' +nextfilename),'r') as firstpage:
                     for line in firstpage:
+                        # TODO this isn't working for pages >1 
                         pattern = r'http://.*showthread.*t=%s.*page=([0-9]*)[^\'"]*' % id
                         # Remember: filename is a tuple...
                         #   which is why it can match both %s
                         # TODO Is this confusing?
                         substitute = r'%s&page=\1%s' % filename
                         # Write altered HTML to a temporary file
-                        temppage.write(pattern, substitute, line)
+                        temppage.write(re.sub(pattern, substitute, line))
+            
             # Overwrite the temporary file with the new one
             # wget created an unchanged version .orig
-            os.rename(newdir+tempfilename, newdir+nextfilename)
+            os.rename(newdir + '/' +tempfilename, newdir + '/' +nextfilename)
 
     print "See %s for details." % _logfile
     print
