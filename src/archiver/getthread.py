@@ -281,15 +281,27 @@ def main(argv):
             with open((newdir + '/' +tempfilename),'w') as temppage:
                 with open((newdir + '/' +nextfilename),'r') as firstpage:
                     for line in firstpage:
-                        # TODO this isn't working for pages >1 
+                        # TODO this only works for other pgs 
                         pattern = r'http://.*showthread.*t=%s.*page=([0-9]*)[^\'"]*' % id
                         # Remember: filename is a tuple...
                         #   which is why it can match both %s
                         # TODO Is this confusing?
                         substitute = r'%s&page=\1%s' % filename
                         # Write altered HTML to a temporary file
-                        temppage.write(re.sub(pattern, substitute, line))
-            
+                        newline = re.sub(pattern, substitute, line)
+
+                        # TODO this should work for links back to 1st pg 
+                        pattern = r'http://.*showthread.*t=%s[^\'"]*' % id
+                        # Remember: filename is a tuple...
+                        #   which is why it can match both %s
+                        # TODO Is this confusing?
+                        substitute = filename[0] + filename[1]
+                        # Write altered HTML to a temporary file
+                        newline = re.sub(pattern, substitute, line)
+
+                        # Write the changed line to the tempfile
+                        temppage.write(newline)
+
             # Overwrite the temporary file with the new one
             # wget created an unchanged version .orig
             os.rename(newdir + '/' +tempfilename, newdir + '/' +nextfilename)
