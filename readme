@@ -1,15 +1,9 @@
 
 Messageboard Research Toolkit
 
+ * Under development
+
 ------------------------------
-
-ARCHIVING
-
- getthread.sh URL [target dir]
-
- * Duplicates the latest version of
-   the thread found at URL
- * Default target dir is ./ 
 
 LIMITATIONS
 
@@ -27,5 +21,5 @@ For more information, contact:
 
 Last update:
 
- 16 June 2010
+ 23 June 2010
 
