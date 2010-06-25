@@ -19,9 +19,9 @@ class Devnull:
         pass
 
 class Thread:
-
-     
-    
+    """A thread is a collection of posts
+    """
+ 
     def __init__(self, url):
         
         # TODO this is janky debug code for handling output.
@@ -30,6 +30,11 @@ class Thread:
         VERBOSE = sys.stdout
 
         self.url = url
+
+        # TODO Not sure how this will be used yet
+        # But for now, it's a list of datetimes corresponding
+        # to subdirs for each time that the thread is downloaded 
+        self.archive = {} 
 
         # Extract unique thread ID from the URL
         print >>VERBOSE, "Seeking thread ID ..."

@@ -10,19 +10,211 @@
 
 from __future__ import with_statement
 from datetime import datetime
-import vbthread
 import getopt
+import json
 import os
 import re
 import shlex
 import subprocess
 import sys
 import urllib2
+import vbforum
+import vbthread
 
 class Devnull:
     """Destination for msgs in non-verbose
     """
     def write(self, msg):
+        pass
+
+def getDateTime(utc = 0):
+    """Return machine- and human-readable date-time as string, e.g. 20070304T203217
+    """
+    if utc:
+        return datetime.utcnow().strftime('%Y%m%dT%H%M%S')
+    else:
+        return datetime.now().strftime('%Y%m%dT%H%M%S')
+
+def isValidDir(localdir):
+    """Check if a valid archive exists at localdir
+    """
+    # TODO Create a method to validate an archive 
+    pass 
+
+class Archive:
+    """Programmable access to archive of threads on disk
+    """
+    
+    def __init__(self, localdir, summary = 'archive.json'):
+        
+        self.forum = {} 
+  
+        # Check if localdir exists 
+        if not os.access(localdir, os.F_OK):
+            # Create a new local archive dir 
+            os.mkdir(localdir)
+                        
+        self.localdir = localdir
+        
+        # Check if summary file exists
+        if not os.access(os.path.join(localdir, summary), os.F_OK):
+            # Create empty JSON summary file 
+            self.dumpJSON()
+         
+        # Load data from a summary file 
+        self.loadJSON()
+ 
+    def loadJSON(self, localdir = '', filename = 'archive.json'):
+        """Load archive data from summary file
+        """
+        # localdir and filename exist so that users can specify
+        # alternate summary files
+        if localdir == '':
+            localdir = self.localdir
+
+        # Load JSON data into a dictionary
+        with open(os.path.join(localdir, filename), 'r') as j:
+            data = json.load(j)
+       
+        print "This archive summary was last updated: %s" % data["lastupdate"]
+ 
+        for forumid, forumobj in data["forum"].iteritems():
+            # Create Forum object for each archived forum
+            self.forum[forumid] = vbforum.Forum(forum)
+        
+            # Create Thread object for each archived thread
+            for threadid, threadobj in data["forum"][forumid]["thread"].iteritems():
+                # TODO change this after updating the Thread class
+                self.forum[forum].thread[threadid] = vbthread.Thread(thread["url"])
+
+            # Create User object for each archived user
+            for userid, userobj in data["forum"][forumid]["user"].iteritems():
+                self.forum[forum].user[userid] = vbuser.User(userid, **userobj)
+ 
+    def dumpJSON(self, localdir = '', filename = 'archive.json', utc = 0):
+        """Save archive data to a summary file
+        """
+        if localdir == '':
+            localdir = self.localdir
+
+        # Create dict of the current data model
+        archive = {}
+        archive["lastupdate"] = getDateTime(utc) 
+        archive["forum"] = {}
+        
+        # Loop over each forum
+        for forumid, forumobj in self.forum:
+           
+            archive["forum"][forumid] = {}
+            
+            # Loop over each thread
+            archive["forum"][forumid]["thread"] = {}
+            for threadid, threadobj in forumobj.thread:
+                # TODO gotta do something about this nightmare!
+                # TODO dict exporter in Thread, User?
+                archive["forum"][forumid]["thread"][threadid] = {}
+                archive["forum"][forumid]["thread"][threadid]["url"] = threadobj.url
+                archive["forum"][forumid]["thread"][threadid]["slug"] = threadobj.slug
+                archive["forum"][forumid]["thread"][threadid]["numpages"] = threadobj.numpages
+                archive["forum"][forumid]["thread"][threadid]["numposts"] = threadobj.numposts
+                archive["forum"][forumid]["thread"][threadid]["archive"] = threadobj.archive
+                
+            # Loop over each user
+            archive["forum"][forumid]["user"] = {}
+            for userid, userobj in forumobj.user:
+                archive["forum"][forumid]["user"][userid] = {}
+                archive["forum"][forumid]["user"][userid]["handle"] = userobj.handle
+                archive["forum"][forumid]["user"][userid]["joined"] = userobj.joined
+                archive["forum"][forumid]["user"][userid]["numposts"] = userobj.numposts
+       
+        with open(os.path.join(localdir, filename), 'w') as j:
+            json.dump(archive, j, indent = 4)
+                
+    def update(self):
+        """Download latest version of all threads
+            and update the JSON summary file.
+        """
+        # Loop over each thread in each forum
+        #   and download latest data
+        for forumid, forumobj in self.forum.iteritems():
+            for threadid, threadobj in forumobj.thread.iteritems():
+                vbarchive.downloadThread(threadobj, self.localdir, platform='windows')
+
+        # Sync this Archive object with new data on disk 
+        # os.walk gives us an iterator of a dir tree
+        # TODO Need to catch errors
+        tree = os.walk(self.localdir, topdown=True)
+
+        # All dirs in the root of the archive
+        #   should be the names of forums
+        cwd = tree.next()[1]
+
+        # Create a Forum object for each subdir
+        for f in cwd:
+            self._addForum(f)
+        
+        currentforum = ''
+        currentthread = ''
+        # Iterate through the rest of the subdirs
+        # They won't be a reliable order so we need to
+        #   figure out where we are in the tree each time
+        for root, dirs, files in tree.next():
+            lastdir = os.path.split(root.rstrip('/')[1]
+            # If the last dir is in our list of forum names
+            #   then we are seeking thread slugs
+            if (lastdir in self.forum.keys()):
+                currentforum = lastdir
+            elif (self._isdate(lastdir)):
+                # This is a leaf
+                # Not doing anything with this right now 
+                pass
+            else:
+                # We are in a thread dir
+                currentthread = lastdir 
+                # TODO THIS IS WHERE I LEFT OFF
+                # Find the URL and thread ID somehow
+                # TODO Much easier if subdirs = IDs instead of slugs
+                # Create this thread object (if needed)
+                # self.forum[currentforum].thread[lastdir] = vbthread.Thread(url)
+                # Add all of the dated subdirs to Thread.archive list
+        
+        # If we survive that insane loop,
+        #   the data model should be up to date
+        # Store this updated data to a JSON summary
+        self.dumpJSON()
+    
+    def _isdate(self, s):
+        """Check if a string is a formatted datetime
+        """
+        return ((len(s) == 15) && (s[8] == 'T'))
+ 
+    def _addForum(self, forumname):
+        """Add a new forum to this archive
+        """
+        # Does this forum already exist in the archive? 
+        if not forumname in self.forum.keys():
+            # If not, then create a new Forum object
+            self.forum[forumname] = vbforum.Forum(forumname)
+
+    def addThread(self, url):
+        """Add a new thread to be tracked by this archive
+        """
+        # Create Thread object from url
+        newthread = vbthread.Thread(url)
+        
+        # Add a Forum object to this Archive
+        self._addForum(newthread.forum)
+
+        # Add this Thread object to the Forum object
+        self.forum[newthread.forum].thread[newthread.id] = newthread
+        
+        # Update the archive
+        #   * Download the latest version of the thread
+        #   * Update the JSON summary file
+        self.update()
+
+    def addUser(self, url):
+        # TODO See addThread for inspiration
         pass
 
 # Destinations for output messages
@@ -66,10 +258,7 @@ def constructTargetDirs(thread, localdir, utc = 0):
     global VERBOSE
 
     # Use machine- and human-readable date-time, e.g. 20070304T203217
-    if utc:
-        date = datetime.utcnow().strftime('%Y%m%dT%H%M%S')
-    else:
-        date = datetime.now().strftime('%Y%m%dT%H%M%S')
+    date = getDateTime(utc)
 
     # Construct a target directory
     # TODO template this?
