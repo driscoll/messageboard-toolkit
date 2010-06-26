@@ -10,13 +10,22 @@
 
 import json
 import re
-import sys
 import urllib2
 import vbutils
 
-def getFirstPage(url=''):
-    """Download html from first page of a thread"""
+def getHTML():
+    """Function to grab HTML from file or URL
+    """
+    # TODO should be able to start thread 
+    #   with filename or URL 
+    #   Should not require internet connection
+    pass
+
+def getPage(url='', page = 1):
+    """Returns page of a thread in string of HTML"""
     if url:
+        # TODO Template multi-page URL construction
+        url = '%s&page=%s' % (url, page)
         # TODO catch errors
         response = urllib2.urlopen(url)
         return response.read()
@@ -52,6 +61,10 @@ def scrapeNumPages(html):
             return int(m.group(1).strip())
     return 1
 
+def scrapePosts(html):
+    """Return list of Post objects scraped from raw HTML"""
+    return [] 
+
 class Thread:
     """A thread is a collection of posts
         Thread objects can be built with either
@@ -59,6 +72,49 @@ class Thread:
             * url to some page in the thread
     """
 
+    def __init__(self, 
+            url = '',
+            id = '',
+            lastupdate = '',
+            title = '',
+            forum = '',
+            numpages = 1,
+            posts = {},
+            jsonstr = '',
+            rawhtml = ''
+            ):
+        
+        if jsonstr:
+
+            self.importJSON(jsonstr)
+
+        elif rawhtml:
+
+            self.importHTML(rawhtml)
+            
+            # When creating a thread object with 
+            #   raw HTML, one should also pass along 
+            #   the lastupdate string 
+            if lastupdate:
+                self.lastupdate = lastupdate
+            else:
+                # Else set lastupdate to now
+                self.lastupdate = getDateTime()
+
+        else:
+
+            self.posts = posts
+            self.lastupdate = lastupdate 
+            self.forum = forum
+            self.id = id
+            self.numpages = numpages 
+            self.title = title 
+            self.url = url
+
+            if url:
+
+                self.update(url)
+ 
     def update(self, url = ''):
         """Retrieve HTML from first page and scrape basic info 
         """
@@ -68,12 +124,38 @@ class Thread:
  
         self.url = vbutils.cleanURL(url)
         self.id = vbutils.findThreadID(self.url)
-        html = getFirstPage(self.url)
+
+        page = []
+        page[0]= getPage(self.url)
+        for p in range(1, scrapeNumPages(page[0])):
+            page[p] = getPage(self.url, (page + 1))
+
+        self.importHTML(page)
+
         self.lastupdate = vbutils.getDateTime()   
+
+    def importHTML(self, rawhtml):
+        """Populate object by scraping chunk of HTML
+        
+        rawhtml : May be a string or a list of strings.
+        """
+
+        html = ''    
+        if type(rawhtml) == type(list()):
+            # TODO make function to do this better
+            for p in rawhtml:
+                html += rawhtml[p]
+        else:
+            html = rawhtml 
+   
+        self.url = vbutils.findThreadURL(html) 
+        self.id = vbutils.findThreadID(self.url)
         self.forum = vbutils.makeSlug(scrapeForumName(html))
         self.title = vbutils.makeSlug(scrapeTitle(html))
         self.numpages = scrapeNumPages(html)
-
+        # TODO implement post scraper
+        self.post = scrapePosts(html)
+    
     def importJSON(self, jsondata):
         """Populate object from a string of JSON data"""
         # Create dictionary from jsondata
@@ -101,32 +183,4 @@ class Thread:
         j["posts"] = {}
         return json.dumps(j, indent=indent_)
 
-    def __init__(self, 
-                url = '',
-                id = '',
-                lastupdate = '',
-                title = '',
-                forum = '',
-                numpages = 1,
-                posts = {},
-                jsonstr = ''
-                ):
-
-        if jsonstr:
-
-            self.importJSON(jsonstr)
-
-        else:
-
-            self.posts = posts
-            self.lastupdate = lastupdate 
-            self.forum = forum
-            self.id = id
-            self.numpages = numpages 
-            self.title = title 
-            self.url = url
-
-            if url:
-
-                self.update(url)
- 
+    
