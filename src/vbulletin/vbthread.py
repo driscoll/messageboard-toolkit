@@ -13,14 +13,6 @@ import re
 import urllib2
 import vbutils
 
-def getHTML():
-    """Function to grab HTML from file or URL
-    """
-    # TODO should be able to start thread 
-    #   with filename or URL 
-    #   Should not require internet connection
-    pass
-
 def getPage(url='', page = 1):
     """Returns page of a thread in string of HTML"""
     if url:
@@ -64,6 +56,22 @@ def scrapeNumPages(html):
 def scrapePosts(html):
     """Return list of Post objects scraped from raw HTML"""
     return [] 
+
+def scrapeID(html):
+    """Scrape and return thread ID from chunk of HTML"""
+    pattern = r'searchthreadid=([0-9]*)'
+    m = re.search(pattern, html)
+    if m:
+        return m.group(1).strip()
+    return ''
+
+def scrapeURL(id, html):
+    """Scrape and return thread URL from chunk of HTML"""
+    pattern = r'http://[^\'"]*showthread[^\'"]*t=%s[^\'"]*' % id
+    m = re.search(pattern, html)
+    if m:
+        return vbutils.cleanURL(m.group(0).strip())
+    return ''
 
 class Thread:
     """A thread is a collection of posts
@@ -147,15 +155,15 @@ class Thread:
                 html += rawhtml[p]
         else:
             html = rawhtml 
-   
-        self.url = vbutils.findThreadURL(html) 
-        self.id = vbutils.findThreadID(self.url)
+
+        self.id = scrapeID(html) 
+        self.url = scrapeURL(self.id, html) 
         self.forum = vbutils.makeSlug(scrapeForumName(html))
         self.title = vbutils.makeSlug(scrapeTitle(html))
         self.numpages = scrapeNumPages(html)
         # TODO implement post scraper
         self.post = scrapePosts(html)
-    
+   
     def importJSON(self, jsondata):
         """Populate object from a string of JSON data"""
         # Create dictionary from jsondata
