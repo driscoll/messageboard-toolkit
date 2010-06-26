@@ -8,6 +8,7 @@
 # Last changed: 20 June 2010
 #
 
+import json
 import re
 import sys
 import urllib2
@@ -19,7 +20,7 @@ def getFirstPage(url=''):
         # TODO catch errors
         response = urllib2.urlopen(url)
         return response.read()
-    return None
+    return '' 
 
 def scrapeForumName(html):
     """Scrape forum name out of HTML"""
@@ -68,21 +69,56 @@ class Thread:
         self.url = vbutils.cleanURL(url)
         self.id = vbutils.findThreadID(self.url)
         html = getFirstPage(self.url)
+        self.lastupdate = vbutils.getDateTime()   
         self.forum = vbutils.makeSlug(scrapeForumName(html))
         self.title = vbutils.makeSlug(scrapeTitle(html))
         self.numpages = scrapeNumPages(html)
 
-    def __init__(self, url=''):
+    def importJSON(self, jsondata):
+        """Populate object from a string of JSON data"""
+        # Create dictionary from jsondata
+        j = json.loads(jsondata)
+        # TODO test this
+        self.posts = j["posts"]
+        self.lastupdate = j["lastupdate "]
+        self.forum = j["forum"]
+        self.id = j["id"]
+        self.numpages = j["numpages "]
+        self.title = j["title "]
+        self.url = j["url"]
 
-        self.archive = {} 
-        
-        self.forum = '' 
-        self.id = ''
-        self.numpages = 1 
-        self.title = ''
+    def exportJSON(self, indent_ = 0):
+        """Generate JSON string from this object
+        """
+        j = {}
+        j["id"] = self.id
+        j["title"] = self.title
+        j["forum"] = self.forum
+        j["url"] = self.url
+        j["lastupdate"] = self.lastupdate
+        j["numpages"] = self.numpages
+        # TODO implement exportJSON in the Post class 
+        j["posts"] = {}
+        return json.dumps(j, indent=indent_)
+
+    def __init__(self, 
+                url = '',
+                id = '',
+                lastupdate = '',
+                title = '',
+                forum = '',
+                numpages = 1,
+                posts = {}
+                ):
+
+        self.posts = posts
+        self.lastupdate = lastupdate 
+        self.forum = forum
+        self.id = id
+        self.numpages = numpages 
+        self.title = title 
         self.url = url
-        
+
         if url:
-            print "ok"
             self.update(url)
  
