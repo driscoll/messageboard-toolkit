@@ -78,13 +78,13 @@ class Thread:
         """Populate object from a string of JSON data"""
         # Create dictionary from jsondata
         j = json.loads(jsondata)
-        # TODO test this
+        # TODO Loop over posts 
         self.posts = j["posts"]
-        self.lastupdate = j["lastupdate "]
+        self.lastupdate = j["lastupdate"]
         self.forum = j["forum"]
         self.id = j["id"]
-        self.numpages = j["numpages "]
-        self.title = j["title "]
+        self.numpages = j["numpages"]
+        self.title = j["title"]
         self.url = j["url"]
 
     def exportJSON(self, indent_ = 0):
@@ -108,17 +108,25 @@ class Thread:
                 title = '',
                 forum = '',
                 numpages = 1,
-                posts = {}
+                posts = {},
+                jsonstr = ''
                 ):
 
-        self.posts = posts
-        self.lastupdate = lastupdate 
-        self.forum = forum
-        self.id = id
-        self.numpages = numpages 
-        self.title = title 
-        self.url = url
+        if jsonstr:
 
-        if url:
-            self.update(url)
+            self.importJSON(jsonstr)
+
+        else:
+
+            self.posts = posts
+            self.lastupdate = lastupdate 
+            self.forum = forum
+            self.id = id
+            self.numpages = numpages 
+            self.title = title 
+            self.url = url
+
+            if url:
+
+                self.update(url)
  
