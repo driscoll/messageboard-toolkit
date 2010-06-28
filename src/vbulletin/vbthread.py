@@ -9,8 +9,9 @@
 #
 
 import json
-import re
 import urllib2
+import vbpost
+import vbscrape
 import vbutils
 
 def getPage(url='', page = 1):
@@ -23,55 +24,6 @@ def getPage(url='', page = 1):
         return response.read()
     return '' 
 
-def scrapeForumName(html):
-    """Scrape forum name out of HTML"""
-    # TODO Relying on vB convention, need to template
-    if html:
-        titletag = html[(html.find('<title>')+7):html.find('</title>')].strip()
-        return titletag.split('-').pop().strip()
-    else:
-        return ''
-
-def scrapeTitle(html):
-    """Scrape thread title out of HTML"""
-    # TODO Relying on vB convention, need to template
-    title = ''
-    if html:
-        titletag = html[(html.find('<title>')+7):html.find('</title>')].strip()
-        for t in titletag.split('-')[0:-1]:
-            title += t.strip() + '_'
-    if title:
-        return title[:-1]
-    return ''
-
-def scrapeNumPages(html):
-    """Scrape number of pages from thread"""
-    # TODO based on vB convention, need template
-    if html:
-        m = re.search(r'Page [0-9]* of ([0-9]*)', html)
-        if m:
-            return int(m.group(1).strip())
-    return 1
-
-def scrapePosts(html):
-    """Return list of Post objects scraped from raw HTML"""
-    return [] 
-
-def scrapeID(html):
-    """Scrape and return thread ID from chunk of HTML"""
-    pattern = r'searchthreadid=([0-9]*)'
-    m = re.search(pattern, html)
-    if m:
-        return m.group(1).strip()
-    return ''
-
-def scrapeURL(id, html):
-    """Scrape and return thread URL from chunk of HTML"""
-    pattern = r'http://[^\'"]*showthread[^\'"]*t=%s[^\'"]*' % id
-    m = re.search(pattern, html)
-    if m:
-        return vbutils.cleanURL(m.group(0).strip())
-    return ''
 
 class Thread:
     """A thread is a collection of posts
@@ -87,7 +39,7 @@ class Thread:
             title = '',
             forum = '',
             numpages = 1,
-            posts = {},
+            post = {}, 
             jsonstr = '',
             rawhtml = ''
             ):
@@ -107,11 +59,11 @@ class Thread:
                 self.lastupdate = lastupdate
             else:
                 # Else set lastupdate to now
-                self.lastupdate = getDateTime()
+                self.lastupdate = vbutils.getDateTime()
 
         else:
 
-            self.posts = posts
+            self.post = post
             self.lastupdate = lastupdate 
             self.forum = forum
             self.id = id
@@ -132,15 +84,20 @@ class Thread:
  
         self.url = vbutils.cleanURL(url)
         self.id = vbutils.findThreadID(self.url)
-
         page = []
-        page[0]= getPage(self.url)
-        for p in range(1, scrapeNumPages(page[0])):
-            page[p] = getPage(self.url, (page + 1))
+        print "Scraping page %s ..." % str(1)
+        page.append(getPage(self.url))
+        self.numpages = int(vbscrape.scrapeNumPages(page[0]))
+        print "Found %s pages." % str(self.numpages)
+        for p in range(1, self.numpages):
+            print "Scraping page %s of %s ..." % (str(p+1), str(self.numpages))
+            page.append(getPage(self.url, (p + 1)))
 
+        print "Importing data from HTML ..."
         self.importHTML(page)
 
         self.lastupdate = vbutils.getDateTime()   
+        print "Thread update completed at %s" % self.lastupdate
 
     def importHTML(self, rawhtml):
         """Populate object by scraping chunk of HTML
@@ -148,28 +105,32 @@ class Thread:
         rawhtml : May be a string or a list of strings.
         """
 
-        html = ''    
+        html = []
+        # Clean up the raw html
         if type(rawhtml) == type(list()):
-            # TODO make function to do this better
-            for p in rawhtml:
-                html += rawhtml[p]
+            for h in rawhtml:
+                html.append(h.encode('utf-8', 'replace'))
         else:
-            html = rawhtml 
-
-        self.id = scrapeID(html) 
-        self.url = scrapeURL(self.id, html) 
-        self.forum = vbutils.makeSlug(scrapeForumName(html))
-        self.title = vbutils.makeSlug(scrapeTitle(html))
-        self.numpages = scrapeNumPages(html)
-        # TODO implement post scraper
-        self.post = scrapePosts(html)
+            html.append(rawhtml.encode('utf-8', 'replace'))
+        
+        self.id = vbscrape.scrapeThreadID(html[0]) 
+        self.url = vbscrape.scrapeThreadURL(self.id, html[0]) 
+        self.forum = vbutils.makeSlug(vbscrape.scrapeForumName(html[0]))
+        self.title = vbutils.makeSlug(vbscrape.scrapeThreadTitle(html[0]))
+        self.numpages = vbscrape.scrapeNumPages(html[0])
+       
+        self.post = {} 
+        for h in html:
+            self.post.update(vbscrape.scrapePosts(h))
    
     def importJSON(self, jsondata):
         """Populate object from a string of JSON data"""
         # Create dictionary from jsondata
         j = json.loads(jsondata)
         # TODO Loop over posts 
-        self.posts = j["posts"]
+        self.post = {}
+        for id, p in j["post"].iteritems():
+            self.post[id] = vbpost.Post(jsonstr = p)
         self.lastupdate = j["lastupdate"]
         self.forum = j["forum"]
         self.id = j["id"]
@@ -177,7 +138,7 @@ class Thread:
         self.title = j["title"]
         self.url = j["url"]
 
-    def exportJSON(self, indent_ = 0):
+    def exportJSON(self, indent_ = 4):
         """Generate JSON string from this object
         """
         j = {}
@@ -187,8 +148,9 @@ class Thread:
         j["url"] = self.url
         j["lastupdate"] = self.lastupdate
         j["numpages"] = self.numpages
-        # TODO implement exportJSON in the Post class 
-        j["posts"] = {}
+        j["post"] = {}
+        for id, p in self.post.iteritems():
+            j["post"][id] = p.exportJSON(indent_) 
         return json.dumps(j, indent=indent_)
 
     
