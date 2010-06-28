@@ -6,17 +6,24 @@ import vbscrape
 
 class Post:
 
-    def importHTML(self, html):
+    def importHTML(self, rawhtml):
         """Populate object by scraping chunk of HTML
         """
+
+        # TODO clean up the HTML
+        # Converting to UTF-8 bc JSON uses UTF-8
+        html = rawhtml.encode('utf-8', 'replace') 
+        
+        # Force integer type conversion 
+        self.id = int(vbscrape.scrapePostID(html))
+        self.postcount = int(vbscrape.scrapePostCount(html, self.id))
+        self.authorid = int(vbscrape.scrapePostAuthorID(html))
+
         self.permalink = vbscrape.scrapePostPermalink(html)
-        self.id = vbscrape.scrapePostID(html) 
-        self.postcount = vbscrape.scrapePostCount(html, self.id) 
-        self.dateposted = vbscrape.scrapePostDate(html) 
-        self.title = vbscrape.scrapePostTitle(html) 
-        self.authorid = vbscrape.scrapePostAuthorID(html) 
-        self.message = vbscrape.scrapePostMessage(html) 
-        self.sig = vbscrape.scrapePostSig(html) 
+        self.dateposted = vbscrape.scrapePostDate(html)
+        self.title = vbscrape.scrapePostTitle(html)
+        self.message = vbscrape.scrapePostMessage(html)
+        self.sig = vbscrape.scrapePostSig(html)
         self.editnote = vbscrape.scrapePostEditNote(html)
  
     def importJSON(self, jsondata):
@@ -33,7 +40,7 @@ class Post:
         self.sig = j["sig"]
         self.editnote = j["editnote"]
 
-    def exportJSON(self, indent_ = 0):
+    def exportJSON(self, indent_ = 4):
         """Generate JSON string from this object
         """
         j = {}
