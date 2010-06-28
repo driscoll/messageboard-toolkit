@@ -7,8 +7,15 @@ Messageboard Research Toolkit
 
 LIMITATIONS
 
- * Limited to vBulletin boards
- * Requires wget
+ * Limited to vBulletin 3.x.x boards
+
+------------------------------
+
+REQUIREMENTS 
+
+ * BeautifulSoup
+ * python-dateutil 
+ * wget
 
 ------------------------------
 
