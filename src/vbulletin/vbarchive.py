@@ -9,7 +9,7 @@
 #
 
 from __future__ import with_statement
-from datetime import datetime
+
 import getopt
 import json
 import os
@@ -18,22 +18,11 @@ import shlex
 import subprocess
 import sys
 import urllib2
+
 import vbforum
 import vbthread
+import vbutils
 
-class Devnull:
-    """Destination for msgs in non-verbose
-    """
-    def write(self, msg):
-        pass
-
-def getDateTime(utc = 0):
-    """Return machine- and human-readable date-time as string, e.g. 20070304T203217
-    """
-    if utc:
-        return datetime.utcnow().strftime('%Y%m%dT%H%M%S')
-    else:
-        return datetime.now().strftime('%Y%m%dT%H%M%S')
 
 def isValidDir(localdir):
     """Check if a valid archive exists at localdir
@@ -99,7 +88,7 @@ class Archive:
 
         # Create dict of the current data model
         archive = {}
-        archive["lastupdate"] = getDateTime(utc) 
+        archive["lastupdate"] = vbutils.getDateTime(utc) 
         archive["forum"] = {}
         
         # Loop over each forum
@@ -159,22 +148,46 @@ class Archive:
         # They won't be a reliable order so we need to
         #   figure out where we are in the tree each time
         for root, dirs, files in tree.next():
-            lastdir = os.path.split(root.rstrip('/')[1]
+            lastdir = os.path.split(root.rstrip('/'))[1]
             # If the last dir is in our list of forum names
             #   then we are seeking thread slugs
             if (lastdir in self.forum.keys()):
                 currentforum = lastdir
-            elif (self._isdate(lastdir)):
+            elif (vbutils.isDate(lastdir)):
                 # This is a leaf
                 # Not doing anything with this right now 
                 pass
             else:
                 # We are in a thread dir
                 currentthread = lastdir 
-                # TODO THIS IS WHERE I LEFT OFF
-                # Find the URL and thread ID somehow
+                # Retrieve list of all files/dirs
+                instances = os.listdir(os.getcwd())
+                # Find the dir of an arbitrary thread instance
+                # Its filename will be a valid datetime stamp
+                while not (vbutils.isDate(instances[0]) and os.path.isdir(instances[0])):
+                    instances.pop(0) 
+                files = os.listdir(os.path.join(os.getcwd(), instances[0]))  
+                # Find an original html page,
+                #   e.g. showthread.php@t=01235.orig
+                while not (files[0][:4] == 'show' and files[0][-4:] == 'orig'):
+                    files.pop(0)
+                
                 # TODO Much easier if subdirs = IDs instead of slugs
-                # Create this thread object (if needed)
+                # TODO Is this something we should change?
+                id = vbutils.findThreadID(files[0])
+
+                # Is there already a thread object?
+                if not id in self.forum[currentforum].thread.keys():
+                    # Read the original html
+                    with open(os.path.join(os.getcwd(), instances[0], files[0]), 'r') as f:
+                        orig_html = f.read()
+
+                    # Find the URL in this HTML 
+                    url = vbutils.findThreadURL(orig_html, id)
+ 
+                    # Create this thread object 
+                    self.addThread(url)
+
                 # self.forum[currentforum].thread[lastdir] = vbthread.Thread(url)
                 # Add all of the dated subdirs to Thread.archive list
         
@@ -183,10 +196,6 @@ class Archive:
         # Store this updated data to a JSON summary
         self.dumpJSON()
     
-    def _isdate(self, s):
-        """Check if a string is a formatted datetime
-        """
-        return ((len(s) == 15) && (s[8] == 'T'))
  
     def _addForum(self, forumname):
         """Add a new forum to this archive
@@ -205,14 +214,11 @@ class Archive:
         # Add a Forum object to this Archive
         self._addForum(newthread.forum)
 
-        # Add this Thread object to the Forum object
-        self.forum[newthread.forum].thread[newthread.id] = newthread
+        # Check if this thread already exists in the forum
+        if not newthread.id in self.forum[newthread.forum].thread.keys():
+            # Add this Thread object to the Forum object
+            self.forum[newthread.forum].thread[newthread.id] = newthread
         
-        # Update the archive
-        #   * Download the latest version of the thread
-        #   * Update the JSON summary file
-        self.update()
-
     def addUser(self, url):
         # TODO See addThread for inspiration
         pass
@@ -221,30 +227,14 @@ class Archive:
 # TODO gotta be a better way
 global VERBOSE
 global DEBUG
-VERBOSE = Devnull()
-DEBUG = Devnull()
+VERBOSE = vbutils.Devnull()
+DEBUG = vbutils.Devnull()
 
 def usage():
+    # TODO terribly out of date
     # Conventional UNIX usage message
     print "Usage: getthread.py [-u] [-l TARGET_DIR] THREAD_URL"
     print
-
-def isValidURL(url):
-    # TODO This is janky verification but it's a start
-    if (url.find('showthread') == -1):
-        return False
-    else:
-        return True
-
-def cleanURL(raw_URL):
-    # Drop the &page= parameter for multipage threads
-    # url = re.sub('&page=[0-9]*','',raw_URL)
-    # Or... drop all parameters except for &t=
-    # TODO are there parameters worth keeping?
-    url = re.sub(r'[&@?][^t][a-zA-Z]*=[a-zA-Z0-9]*','',raw_URL)
-    if not (url.startswith('http://')):
-        url = 'http://' + url
-    return url
 
 def constructLogfile(localdir, forum, slug):
     # TODO we could do something more useful with this logfile
@@ -258,7 +248,7 @@ def constructTargetDirs(thread, localdir, utc = 0):
     global VERBOSE
 
     # Use machine- and human-readable date-time, e.g. 20070304T203217
-    date = getDateTime(utc)
+    date = vbutils.getDateTime(utc)
 
     # Construct a target directory
     # TODO template this?
@@ -353,7 +343,7 @@ def fixMultiPageLinks(thread, page, targetdir, platform='unix'):
             for line in firstpage:
                 
                 # Transform links to pages other than page 1
-                pattern = r'http://.*showthread.*t=%s.*page=([0-9]*)[^\'"]*' % thread.id
+                pattern = r'http://[^\'"]*showthread[^\'"]*t=%s[^\'"]*page=([0-9]*)[^\'"]*' % thread.id
                 # Remember filename is a tuple...
                 #   which is why it can match both %s
                 substitute = r'%s&page=\1%s' % filename
@@ -361,8 +351,8 @@ def fixMultiPageLinks(thread, page, targetdir, platform='unix'):
                 newline = re.sub(pattern, substitute, line)
                 
 
-                # TODO This should transform links to page 1 
-                pattern = r'http://.*showthread.*t=%s[^\'"]*' % id
+                # This should transform links to page 1 
+                pattern = r'http://[^\'"]*showthread[^\'"]*t=%s[^\'"]*' % thread.id
                 # Remember: filename is a tuple...
                 #   which is why it can match both %s
                 # TODO Is this confusing?
@@ -470,14 +460,14 @@ def init(argv):
 
     # Is raw_URL a valid vB thread URL?
     print >>VERBOSE, "Validating URL ..."
-    if not (isValidURL(raw_URL)):
+    if not (vbutils.isValidURL(raw_URL)):
         print "Error: %s is not a valid vBulletin thread URL." % raw_URL
         print
         sys.exit(2)
 
     # Clean up URL from the commandline 
     # Keep the domain, sub dirs, showthread, and &t=
-    params["url"] = cleanURL(raw_URL)
+    params["url"] = vbutils.cleanURL(raw_URL)
     print >>VERBOSE, "Valid thread URL: %s" % url
     return params 
 
