@@ -7,4 +7,5 @@ class Forum:
         self.name = name
         self.thread = {}
         self.user = {}
+        self.url = ''
 
