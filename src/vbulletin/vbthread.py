@@ -192,4 +192,15 @@ class Thread:
         """Return number of posts in the thread"""
         return len(self.post)
 
-    
+    def meanTimeBetweenPosts(self):
+        """Return mean seconds between posts in the thread""" 
+        postdate = []
+        for p in self.post.itervalues():
+            postdate.append(vbutils.parseDateTime(p.dateposted))
+        postdate.sort()
+        delta = 0
+        i = 1
+        while (i < len(postdate)):
+            delta += abs(postdate[i-1] - postdate[i]).seconds
+            i += 1
+        return (float(delta)/len(postdate))
