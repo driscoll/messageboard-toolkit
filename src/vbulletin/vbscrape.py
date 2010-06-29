@@ -16,7 +16,7 @@ def scrapePosts(html):
 
     html: List of html pages
     """
-    if (type(html) == type(str())):
+    if not (type(html) == type([])):
         s = html 
         html = []
         html.append(s) 

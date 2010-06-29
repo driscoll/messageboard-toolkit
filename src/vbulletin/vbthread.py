@@ -85,7 +85,7 @@ class Thread:
         self.url = vbutils.cleanURL(url)
         self.id = vbutils.findThreadID(self.url)
         page = []
-        print "Scraping page %s ..." % str(1)
+        print "Scraping %s ..." % self.url
         page.append(getPage(self.url))
         self.numpages = int(vbscrape.scrapeNumPages(page[0]))
         print "Found %s pages." % str(self.numpages)
@@ -109,28 +109,48 @@ class Thread:
         # Clean up the raw html
         if type(rawhtml) == type(list()):
             for h in rawhtml:
-                html.append(h.encode('utf-8', 'replace'))
+                html.append(vbutils.cleanEncoding(h))
         else:
-            html.append(rawhtml.encode('utf-8', 'replace'))
+            html.append(vbutils.cleanEncoding(h))
         
         self.id = vbscrape.scrapeThreadID(html[0]) 
         self.url = vbscrape.scrapeThreadURL(self.id, html[0]) 
         self.forum = vbutils.makeSlug(vbscrape.scrapeForumName(html[0]))
         self.title = vbutils.makeSlug(vbscrape.scrapeThreadTitle(html[0]))
         self.numpages = vbscrape.scrapeNumPages(html[0])
-       
+
         self.post = {} 
         for h in html:
             self.post.update(vbscrape.scrapePosts(h))
    
     def importJSON(self, jsondata):
         """Populate object from a string of JSON data"""
-        # Create dictionary from jsondata
-        j = json.loads(jsondata)
-        # TODO Loop over posts 
+       
+        # ''.join is used to accomodate list input
+        clean = vbutils.cleanEncoding(''.join(jsondata), isHTML = False)
+
+        # Try to load JSON data from the input str
+        try:
+            j = json.loads(clean)
+        except:
+            print "Error: Could not find JSON data."
+            return None
+        
+        # Loop over posts creating Post objs
         self.post = {}
+        
+        print "Found %s posts." % len(j["post"])
         for id, p in j["post"].iteritems():
-            self.post[id] = vbpost.Post(jsonstr = p)
+            print "Importing Post #%s ..." % str(id)
+            if type(p) is dict:
+                # Keyword args must be str
+                # but our JSON dict has unicode keys
+                # so we must convert before passing
+                # into the Post.__init__() method
+                kw = vbutils.convertKeysToStr(p)
+                self.post[id] = vbpost.Post(**kw)
+            elif (type(p) in [str, unicode]):
+                self.post[id] = vbpost.Post(jsonstr = p)
         self.lastupdate = j["lastupdate"]
         self.forum = j["forum"]
         self.id = j["id"]
@@ -141,6 +161,10 @@ class Thread:
     def exportJSON(self, indent_ = 4):
         """Generate JSON string from this object
         """
+        return json.dumps(self.exportDict(), indent=indent_)
+    
+    def exportDict(self):
+        """Return dict obj with all thread data"""
         j = {}
         j["id"] = self.id
         j["title"] = self.title
@@ -150,7 +174,11 @@ class Thread:
         j["numpages"] = self.numpages
         j["post"] = {}
         for id, p in self.post.iteritems():
-            j["post"][id] = p.exportJSON(indent_) 
-        return json.dumps(j, indent=indent_)
+            j["post"][id] = p.exportDict()
+        return j
+
+    def numPosts(self):
+        """Return number of posts in the thread"""
+        return len(self.post)
 
     

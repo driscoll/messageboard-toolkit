@@ -12,7 +12,7 @@ class Post:
 
         # TODO clean up the HTML
         # Converting to UTF-8 bc JSON uses UTF-8
-        html = rawhtml.encode('utf-8', 'replace') 
+        html = vbutils.cleanEncoding(rawhtml)
         
         # Force integer type conversion 
         self.id = int(vbscrape.scrapePostID(html))
@@ -29,7 +29,17 @@ class Post:
     def importJSON(self, jsondata):
         """Populate object from JSON string
         """
-        j = json.loads(jsondata)
+ 
+        # ''.join is used to accomodate list input
+        clean = vbutils.cleanEncoding(''.join(jsondata), isHTML = False)
+
+        # Try to load JSON data from the input str
+        try:
+            j = json.loads(clean)
+        except TypeError:
+            print "Error: Could not find JSON data."
+            return None
+        
         self.permalink = j["permalink"]
         self.id = j["id"]
         self.postcount = j["postcount"]
@@ -40,9 +50,8 @@ class Post:
         self.sig = j["sig"]
         self.editnote = j["editnote"]
 
-    def exportJSON(self, indent_ = 4):
-        """Generate JSON string from this object
-        """
+    def exportDict(self):
+        """Return dict obj with all post data"""
         j = {}
         j["permalink"] = self.permalink
         j["id"] = self.id
@@ -53,7 +62,12 @@ class Post:
         j["message"] = self.message 
         j["sig"] = self.sig
         j["editnote"] = self.editnote
-        return json.dumps(j, indent=indent_)
+        return j
+
+    def exportJSON(self, indent_ = 4):
+        """Generate JSON string from this object
+        """
+        return json.dumps(self.exportDict(), indent=indent_)
 
     def __init__(self,
                 id = '',
