@@ -40,7 +40,7 @@ def findThreadID(s):
     """Find thread ID in a URL or filename"""
     m = re.search(r't=([0-9]*)', s)
     if m == None:
-        return None 
+        return '' 
     else:   
         return m.group(1).strip()
 
@@ -51,7 +51,7 @@ def findThreadURL(s, id):
     pattern = r'http://[^\'"]*showthread[^\'"]*t=%s[^\'"]*' % id
     m = re.search(pattern, s)
     if m == None:
-        return None 
+        return '' 
     else:
         return m.group(0).strip()
 
@@ -67,10 +67,9 @@ def isValidURL(url):
     
     TODO Janky verification but it's a start
     """
-    if (url.find('showthread') == -1):
+    if (url.find('showthread') < 0) or (url.find('http://') < 0):
         return False
-    else:
-        return True
+    return True
 
 def isValidJSONStr(obj):
     """Check if obj is a str, list, or dict of valid JSON 

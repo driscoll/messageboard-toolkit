@@ -34,91 +34,112 @@ class Archive:
     """Programmable access to archive of threads on disk
     """
     
-    def __init__(self, localdir, summary = 'archive.json'):
-        
-        self.forum = {} 
-  
+    def __init__(self, 
+                localdir = '.', 
+                summary = 'archive.json', 
+                lastupdate = '',
+                forum = {}
+                ):
+
+        if not localdir:
+            localdir = '.'
+        if not summary:
+            summary = 'archive.json'
+
         # Check if localdir exists 
         if not os.access(localdir, os.F_OK):
             # Create a new local archive dir 
             os.mkdir(localdir)
-                        
         self.localdir = localdir
+        print "Archive located at %s" % self.localdir
+
+        self.lastupdate = lastupdate
+        self.forum = forum 
+
+        # Did we receive forum data as an arg? 
+        if forum:
+            # If so, create Forum objs 
+            for id, f in forum.iteritems():
+                self.forum[id] = vbforum.Forum(**f)
+            # And attempt to update the local archive on disk
+            self.update()
         
-        # Check if summary file exists
-        if not os.access(os.path.join(localdir, summary), os.F_OK):
-            # Create empty JSON summary file 
-            self.dumpJSON()
-         
-        # Load data from a summary file 
-        self.loadJSON()
- 
-    def loadJSON(self, localdir = '', filename = 'archive.json'):
-        """Load archive data from summary file
+        # If not, does a summary file exist in localdir?
+        elif os.access(os.path.join(localdir, summary), os.F_OK):
+            # If so, load forum data from the summary file 
+            self.readSummary()
+        else:
+            # TODO try to discover thread data and create summary 
+            # 
+            # Otherwise, create empty JSON summary file 
+            print "No JSON summary found in archive dir."
+            print "Update this object and it will try to read your archive." 
+            self.writeSummary()
+        
+    def importJSON(self, jsondata):
+        """Load archive data from string of JSON data 
+        
+        TODO implement this method
         """
-        # localdir and filename exist so that users can specify
-        # alternate summary files
-        if localdir == '':
+        pass 
+
+    def readSummary(self, localdir = '', filename = 'archive.json'):
+        """Read archive data from summary file
+        """
+        # localdir and filename args enable users to specify
+        # alternate JSON summary files
+        if not localdir:
             localdir = self.localdir
 
         # Load JSON data into a dictionary
         with open(os.path.join(localdir, filename), 'r') as j:
-            data = json.load(j)
+            try:
+                # Load JSON data from summary file into dict 
+                jsond = json.load(j)
+            except:
+                print "Could not load JSON data from %s" % (os.path.join(localdir, filename))
+                return None
        
-        print "This archive summary was last updated: %s" % data["lastupdate"]
- 
-        for forumid, forumobj in data["forum"].iteritems():
-            # Create Forum object for each archived forum
-            self.forum[forumid] = vbforum.Forum(forum)
+        self.lastupdate = jsond["lastupdate"]
+        print "This archive summary was last updated: %s" % jsond["lastupdate"]
         
-            # Create Thread object for each archived thread
-            for threadid, threadobj in data["forum"][forumid]["thread"].iteritems():
-                # TODO change this after updating the Thread class
-                self.forum[forum].thread[threadid] = vbthread.Thread(thread["url"])
-
-            # Create User object for each archived user
-            for userid, userobj in data["forum"][forumid]["user"].iteritems():
-                self.forum[forum].user[userid] = vbuser.User(userid, **userobj)
- 
-    def dumpJSON(self, localdir = '', filename = 'archive.json', utc = 0):
-        """Save archive data to a summary file
-        """
-        if localdir == '':
-            localdir = self.localdir
-
+        # Loop over forum dict, creating Forum objects 
+        self.forum = {} 
+        for forumkey, forumdict in jsond["forum"].iteritems():
+            # Create Forum object for each archived forum
+            # Can't use unicode strings as keywords in dict :(
+            kw = vbutils.convertKeysToStr(forumdict)
+            self.forum[forumkey] = vbforum.Forum(**kw)
+        
+    def exportDict(self):
+        """Return dict obj with all Archive data"""
         # Create dict of the current data model
         archive = {}
-        archive["lastupdate"] = vbutils.getDateTime(utc) 
+        archive["lastupdate"] = vbutils.getDateTime() 
         archive["forum"] = {}
         
         # Loop over each forum
-        for forumid, forumobj in self.forum:
-           
-            archive["forum"][forumid] = {}
-            
-            # Loop over each thread
-            archive["forum"][forumid]["thread"] = {}
-            for threadid, threadobj in forumobj.thread:
-                # TODO gotta do something about this nightmare!
-                # TODO dict exporter in Thread, User?
-                archive["forum"][forumid]["thread"][threadid] = {}
-                archive["forum"][forumid]["thread"][threadid]["url"] = threadobj.url
-                archive["forum"][forumid]["thread"][threadid]["slug"] = threadobj.slug
-                archive["forum"][forumid]["thread"][threadid]["numpages"] = threadobj.numpages
-                archive["forum"][forumid]["thread"][threadid]["numposts"] = threadobj.numposts
-                archive["forum"][forumid]["thread"][threadid]["archive"] = threadobj.archive
-                
-            # Loop over each user
-            archive["forum"][forumid]["user"] = {}
-            for userid, userobj in forumobj.user:
-                archive["forum"][forumid]["user"][userid] = {}
-                archive["forum"][forumid]["user"][userid]["handle"] = userobj.handle
-                archive["forum"][forumid]["user"][userid]["joined"] = userobj.joined
-                archive["forum"][forumid]["user"][userid]["numposts"] = userobj.numposts
+        for forumid, forumobj in self.forum.iteritems():
+            archive["forum"][forumid] = self.forum[forumid].exportDict() 
+        
+        return archive            
+  
+    def exportJSON(self, indent_ = 4):
+        """Generate JSON string from this object
+        """
+        return json.dumps(self.exportDict(), indent = indent_)
        
-        with open(os.path.join(localdir, filename), 'w') as j:
-            json.dump(archive, j, indent = 4)
-                
+    def writeSummary(self, localdir = '', filename = 'archive.json', utc = 0):
+        """Write archive data to a JSON summary file
+        """
+        if not localdir:
+            localdir = self.localdir
+
+        data = self.exportDict()
+   
+        with open(os.path.join(localdir, filename), 'w') as summaryf: 
+            json.dump(data, summaryf, indent = 4)
+
     def update(self):
         """Download latest version of all threads
             and update the JSON summary file.
@@ -126,77 +147,100 @@ class Archive:
         # Loop over each thread in each forum
         #   and download latest data
         for forumid, forumobj in self.forum.iteritems():
+            print "Checking %s threads in %s for updates ..." % (len(forumobj.thread), forumid)
             for threadid, threadobj in forumobj.thread.iteritems():
-                vbarchive.downloadThread(threadobj, self.localdir, platform='windows')
+                # TODO Problem: Thread objects created from
+                #   arbitrary HTML/JSON may not have URL 
+                #   Maybe we can implement a smarter URL guessing
+                #   heuristic based on other things 
+                #   Even google search? :-?
+                downloadThread(threadobj, self.localdir, platform='windows')
 
         # Sync this Archive object with new data on disk 
         # os.walk gives us an iterator of a dir tree
         # TODO Need to catch errors
-        tree = os.walk(self.localdir, topdown=True)
+        print "Syncing new data in %s" % self.localdir
 
-        # All dirs in the root of the archive
-        #   should be the names of forums
-        cwd = tree.next()[1]
-
-        # Create a Forum object for each subdir
-        for f in cwd:
-            self._addForum(f)
-        
         currentforum = ''
+        currentthreadlist = [] 
         currentthread = ''
+        currentinstance = ''
         # Iterate through the rest of the subdirs
         # They won't be a reliable order so we need to
         #   figure out where we are in the tree each time
-        for root, dirs, files in tree.next():
+        for root, dirs, files in os.walk(self.localdir, topdown=True):
             lastdir = os.path.split(root.rstrip('/'))[1]
-            # If the last dir is in our list of forum names
-            #   then we are seeking thread slugs
-            if (lastdir in self.forum.keys()):
+            nextlastdir = os.path.split(os.path.split(root.rstrip('/'))[0]) 
+            if (root == self.localdir):
+                # We are in archive root
+                # Create a Forum object for each subdir
+                for d in dirs:
+                    print "Found forum %s" % d
+                    self._addForum(d)
+            elif (lastdir in self.forum.keys()):
+                # We are in a forum dir
                 currentforum = lastdir
-            elif (vbutils.isDate(lastdir)):
-                # This is a leaf
-                # Not doing anything with this right now 
-                pass
-            else:
+                # Assume all files are subdirs named by slugs
+                # TODO Need to validate these dirs
+                currentthreadlist = dirs 
+                for t in currentthreadlist:
+                    print "Found thread %s" % t
+                currentinstance = ''            
+            elif (lastdir in currentthreadlist):
                 # We are in a thread dir
-                currentthread = lastdir 
-                # Retrieve list of all files/dirs
-                instances = os.listdir(os.getcwd())
-                # Find the dir of an arbitrary thread instance
-                # Its filename will be a valid datetime stamp
-                while not (vbutils.isDate(instances[0]) and os.path.isdir(instances[0])):
-                    instances.pop(0) 
-                files = os.listdir(os.path.join(os.getcwd(), instances[0]))  
+                currentthread = lastdir
+                # Assume all files are subdirs with instances
+                # Sort by date 
+                print "Reviewing thread %s" % currentthread
+                print "Found %s saved instances" % len(dirs)
+                dirs.sort()
+                dirs = [dirs[0]]
+                currentinstance = dirs[0]
+                print "Latest update was on %s" % currentinstance
+            elif (lastdir == currentinstance):
+                # We are in the dir of an instance
+                orig_file = 0 
                 # Find an original html page,
                 #   e.g. showthread.php@t=01235.orig
-                while not (files[0][:4] == 'show' and files[0][-4:] == 'orig'):
-                    files.pop(0)
-                
+                # TODO this is vB convention need to be template
+                while not (files[orig_file][:4] == 'show' and files[orig_file][-4:] == 'orig'):
+                    orig_file += 1 
+                print "Found source file: %s" % files[orig_file]
+
                 # TODO Much easier if subdirs = IDs instead of slugs
                 # TODO Is this something we should change?
-                id = vbutils.findThreadID(files[0])
+                id = vbutils.findThreadID(files[orig_file])
 
                 # Is there already a thread object?
                 if not id in self.forum[currentforum].thread.keys():
                     # Read the original html
-                    with open(os.path.join(os.getcwd(), instances[0], files[0]), 'r') as f:
+                    subdir = root 
+                    print "Attempting to read from %s" % subdir
+                    with open(os.path.join(subdir, files[orig_file]), 'r') as f:
                         orig_html = f.read()
 
                     # Find the URL in this HTML 
+                    # TODO sometimes the URL is not discoverable
                     url = vbutils.findThreadURL(orig_html, id)
  
                     # Create this thread object 
-                    self.addThread(url)
+                    # TODO Try/except might be cleaner
+                    if not url:
+                        print "No valid URL found in HTML."
+                        print "Trying to make Thread object anyway from the HTML."
+                        self.addThread(rawhtml_ = orig_html)
+                    else:
+                        if not self.addThread(url):
+                            print "Tried and failed to create Thread object for URL: %s" % url
 
-                # self.forum[currentforum].thread[lastdir] = vbthread.Thread(url)
-                # Add all of the dated subdirs to Thread.archive list
-        
+        # Last update is now!
+        self.lastupdate = vbutils.getDateTime()        
+
         # If we survive that insane loop,
         #   the data model should be up to date
         # Store this updated data to a JSON summary
-        self.dumpJSON()
+        self.writeSummary()
     
- 
     def _addForum(self, forumname):
         """Add a new forum to this archive
         """
@@ -205,11 +249,15 @@ class Archive:
             # If not, then create a new Forum object
             self.forum[forumname] = vbforum.Forum(forumname)
 
-    def addThread(self, url):
+    def addThread(self, url = '', rawhtml_ = ''):
         """Add a new thread to be tracked by this archive
         """
+        # URL or HTML required to addThread in this manner
+        if not url and not rawhtml_:
+            return False
+
         # Create Thread object from url
-        newthread = vbthread.Thread(url)
+        newthread = vbthread.Thread(url, rawhtml = rawhtml_)
         
         # Add a Forum object to this Archive
         self._addForum(newthread.forum)
@@ -218,17 +266,13 @@ class Archive:
         if not newthread.id in self.forum[newthread.forum].thread.keys():
             # Add this Thread object to the Forum object
             self.forum[newthread.forum].thread[newthread.id] = newthread
-        
+       
+        # update() should usually be called after addThread 
+        # so that the new Thread data is written to disk 
+
     def addUser(self, url):
         # TODO See addThread for inspiration
         pass
-
-# Destinations for output messages
-# TODO gotta be a better way
-global VERBOSE
-global DEBUG
-VERBOSE = vbutils.Devnull()
-DEBUG = vbutils.Devnull()
 
 def usage():
     # TODO terribly out of date
@@ -242,41 +286,41 @@ def constructLogfile(localdir, forum, slug):
  
 def constructTargetDirs(thread, localdir, utc = 0): 
     """Create needed subdirs to archive thread
-        If utc is True, then use UTC time
+    
+    If utc is True, then use UTC time
     """
     
-    global VERBOSE
-
     # Use machine- and human-readable date-time, e.g. 20070304T203217
-    date = vbutils.getDateTime(utc)
+    date = vbutils.getDateTime()
 
     # Construct a target directory
     # TODO template this?
-    print >>VERBOSE, "Create target directories ..."
-    localsubdirs = [thread.forum, thread.slug, date]
+    print "Create target directories ..."
+    localsubdirs = [thread.forum, thread.title, date]
     newdir = localdir
     for sub in localsubdirs:
         newdir += '/' + str(sub) 
         # check if newdir exists
         if not os.access(newdir, os.F_OK):
-            print >>VERBOSE, "%s doesn't exist. Creating ..." % newdir
+            print "%s doesn't exist. Creating ..." % newdir
             # if not, create it
             os.mkdir(newdir)     
-    print >>VERBOSE, "Target directory is %s" % newdir
+    print "Target directory is %s" % newdir
     return newdir
 
 def wgetPage(thread, page, targetdir, platform = 'unix', logfile = ''):
     """Call wget to download page of a thread to targetdir for local archive
     """
 
-    global VERBOSE
+    if not vbutils.isValidURL(thread.url):
+        return False
 
     # Count up the subdirs in this URL
     #   Sometimes vBulletin is installed in root
     #   Sometimes it is in a subdir
     # We need to know this number so we can tell wget to chill later
     subdirs = (thread.url.count('/') - 3)
-    print >>VERBOSE, "Found %s sub-dir in the URL ..." % subdirs
+    print "Found %s sub-dir in the URL ..." % subdirs
 
     if (page == 1):
         wget_cmd = "wget -v -nH --cut-dirs=%s -k -K -E -H -p -P %s -S -w 1 --random-wait --no-cache --no-cookies \"%s\"" % (subdirs, targetdir, thread.url)
@@ -307,7 +351,7 @@ def wgetPage(thread, page, targetdir, platform = 'unix', logfile = ''):
     proc_firstpage.communicate()
 
     # Assuming success!
-    return 1
+    return True 
 
 def fixMultiPageLinks(thread, page, targetdir, platform='unix'):
     """Transform links to other thread pages in wget's single-page HTML output for local browsing 
@@ -375,7 +419,6 @@ def downloadThread(thread, localdir = '.', logfile = '', platform='unix'):
     thread: Thread object
     targetdir: String 
     """
-    global VERBOSE
    
     # Construct target directories
     targetdir = constructTargetDirs(thread, localdir)
@@ -387,25 +430,29 @@ def downloadThread(thread, localdir = '.', logfile = '', platform='unix'):
     for page in range(1, (thread.numpages + 1)): 
 
         # Download page of thread
-        print >>VERBOSE, "Downloading page %s of %s ..." % (page, thread.numpages)
-        wgetPage(thread, page, targetdir, platform, logfile) 
+        print "Downloading page %s of %s ..." % (page, thread.numpages)
 
-        # Transform links in local archive
-        print >>VERBOSE, "Transforming links ..."
-        fixMultiPageLinks(thread, page, targetdir, platform)
+        # TODO This would be cleaner with try/except
+        #       wgetPage needs to raise exceptions
+        if (wgetPage(thread, page, targetdir, platform, logfile)):
+        
+            # Transform links in local archive
+            print "Transforming links in page %s ..." % page
+            fixMultiPageLinks(thread, page, targetdir, platform)
 
-    print >>VERBOSE, "Thread download complete!"
+        else:
+
+            print "Unable to download page %s" % page
+            print "Bad URL?"
+            print "URL: %s" % str(thread.url)
+
+    print "Thread download complete!"
 
 def init(argv):
     """Init all globals according to options and params in argv
     Returns string with cleaned up URL of a thread to archive
     """
     
-    # Destinations for output
-    # TODO create logfile at some point?
-    global VERBOSE
-    global DEBUG
-
     params = {}
     params = { "utc" : 0,
                 "localdir" : '.' }
@@ -435,9 +482,9 @@ def init(argv):
             usage()
             sys.exit()
         elif opt in ("-v", "--verbose"):
-            VERBOSE = sys.stdout 
+            pass 
         elif opt in ("-d", "--debug"):
-            DEBUG = sys.stdout
+            pass
         elif opt in ("-u", "--utc"):
             params["utc"] = 1
         elif opt in ("-l", "--localdir"):
@@ -447,7 +494,7 @@ def init(argv):
         elif opt in ("-w", "--windows"):
             params["platform"] = "windows"
         else:
-            print >>DEBUG, "opt: %s, arg: %s" % (opt, arg)
+            print "opt: %s, arg: %s" % (opt, arg)
 
     # Should be exactly 1 positional argument
     # URL to the thread should be the only argument 
@@ -459,7 +506,7 @@ def init(argv):
         sys.exit(2)
 
     # Is raw_URL a valid vB thread URL?
-    print >>VERBOSE, "Validating URL ..."
+    print "Validating URL ..."
     if not (vbutils.isValidURL(raw_URL)):
         print "Error: %s is not a valid vBulletin thread URL." % raw_URL
         print
@@ -468,7 +515,7 @@ def init(argv):
     # Clean up URL from the commandline 
     # Keep the domain, sub dirs, showthread, and &t=
     params["url"] = vbutils.cleanURL(raw_URL)
-    print >>VERBOSE, "Valid thread URL: %s" % url
+    print "Valid thread URL: %s" % url
     return params 
 
 def main(argv):
@@ -481,13 +528,13 @@ def main(argv):
 
     # One logfile per thread
     # Subsequent archives will append to this logfile
-    params["logfile"] = constructLogfile(params["localdir"], forum, slug)
+    params["logfile"] = constructLogfile(params["localdir"], forum, title)
 
     downloadThread(thread, targetdir, params["logfile"])
 
-    print >>VERBOSE, "See %s for details." % params["logfile"]
+    print "See %s for details." % params["logfile"]
     print
-    print >>VERBOSE, "Goodbye."
+    print "Goodbye."
     print
     
    

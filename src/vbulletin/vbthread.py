@@ -63,16 +63,20 @@ class Thread:
 
         else:
 
-            self.post = post
             self.lastupdate = lastupdate 
             self.forum = forum
             self.id = id
             self.numpages = numpages 
             self.title = title 
             self.url = url
-
+            if post:
+                self.post = {}
+                for id, p in post.iteritems():
+                    kw = vbutils.convertKeysToStr(p)
+                    self.post[id] = vbpost.Post(**kw) 
+            else:
+                self.post = post 
             if url:
-
                 self.update(url)
  
     def update(self, url = ''):
@@ -81,7 +85,7 @@ class Thread:
    
         if not url:
             url = self.url 
- 
+
         self.url = vbutils.cleanURL(url)
         self.id = vbutils.findThreadID(self.url)
         page = []
@@ -94,15 +98,19 @@ class Thread:
             page.append(getPage(self.url, (p + 1)))
 
         print "Importing data from HTML ..."
-        self.importHTML(page)
+        self.importHTML(page, self.url)
 
         self.lastupdate = vbutils.getDateTime()   
         print "Thread update completed at %s" % self.lastupdate
 
-    def importHTML(self, rawhtml):
+    def importHTML(self, rawhtml, url = ''):
         """Populate object by scraping chunk of HTML
-        
+       
         rawhtml : May be a string or a list of strings.
+        url : Optional param, useful to specify URL explicitly
+                in situations where the URL is known.
+                Many vB installations use only relative links
+                so it can be hard to discover a URL from code.
         """
 
         html = []
@@ -111,10 +119,13 @@ class Thread:
             for h in rawhtml:
                 html.append(vbutils.cleanEncoding(h))
         else:
-            html.append(vbutils.cleanEncoding(h))
+            html.append(vbutils.cleanEncoding(rawhtml))
         
         self.id = vbscrape.scrapeThreadID(html[0]) 
-        self.url = vbscrape.scrapeThreadURL(self.id, html[0]) 
+        if url:
+            self.url = url
+        else:
+            self.url = vbscrape.scrapeThreadURL(self.id, html[0]) 
         self.forum = vbutils.makeSlug(vbscrape.scrapeForumName(html[0]))
         self.title = vbutils.makeSlug(vbscrape.scrapeThreadTitle(html[0]))
         self.numpages = vbscrape.scrapeNumPages(html[0])
