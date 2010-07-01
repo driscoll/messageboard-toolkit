@@ -34,6 +34,7 @@ def scrapePostMessage(html):
     """Return content from first post in str of HTML"""
     comment = r'message'
     return scrapeComment(comment, html).strip()
+
 def scrapePostEditNote(html):
     """Return edit notes from first post in str of HTML
 
@@ -150,11 +151,21 @@ def scrapeThreadTitle(html):
 
 def scrapeThreadID(html):
     """Return thread ID from str of HTML"""
-    pattern = r't=([0-9]*)[^\'"]*goto=next'
-    m = re.search(pattern, html)
+    pattern = []
+    pattern.append(r't=([0-9]*)[^\'"]*goto=next')
+    pattern.append(r'threadid=([0-9]*)')
+    pattern.append(r'/([0-9]*)-[^\.]*.html')
+    pattern.append(r't([0-9]*)') 
+    m = None
+    p = 0
+    while (m == None) and (p < len(pattern)):
+        m = re.search(pattern[p], html)
+        p += 1
     if m:
         return m.group(1).strip()
-    return ''
+    else:
+        print "Thread ID not found."
+        return ''
 
 def scrapeThreadURL(id, html):
     """Return thread URL from str of HTML"""
