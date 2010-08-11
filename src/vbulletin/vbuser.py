@@ -3,17 +3,34 @@
 class User:
     """User in a forum
     """
-    def __init__(self, id, **args):
+    def __init__(self, 
+                id = '', 
+                lastupdate = '',
+                firstname = '',
+                lastname = '',
+                username = '',
+                datejoined = '',
+                lastlogin = '',
+                reply = [],
+                thread = [], 
+                jsonstr = '',
+                rawhtml = ''  
+                ):
+
+        if jsonstr:
+    
+            self.importJSON(jsonstr)
+
+        elif rawhtml:
+
+            self.importHTML(rawhtml)
+
         self.id = id
-        if "handle" in args.keys():
-            self.handle = str(args["handle"])
-        else:
-            self.handle = ''
-        if "joined" in args.keys():
-            self.joined = str(args["joined"])
-        else:
-            self.joined = ''
-        if "numposts" in args.keys():
-            self.numposts = int(args["numposts"])
-        else:
-            self.numposts = -1
+
+
+    def importJSON(self, jsonstr):
+        pass
+    
+    def importHTML(self, rawhtml):
+        pass
+

@@ -151,21 +151,47 @@ def scrapeThreadTitle(html):
 
 def scrapeThreadID(html):
     """Return thread ID from str of HTML"""
+
     pattern = []
+
+    # Yuku (Survivor Sucks)
+    pattern.append(r'topic/([0-9]*)')
+    
+    # vBulletin (Extreme Skins)
     pattern.append(r't=([0-9]*)[^\'"]*goto=next')
     pattern.append(r'threadid=([0-9]*)')
+    pattern.append(r't=([0-9]*)')
     pattern.append(r'/([0-9]*)-[^\.]*.html')
-    pattern.append(r't([0-9]*)') 
+    pattern.append(r't([0-9]+)')
+    
+    # (Pricescope)
+    pattern.append(r'topicID=([0-9]*)') 
+
+    
     m = None
     p = 0
     while (m == None) and (p < len(pattern)):
+        print "Trying %s" % pattern[p]
         m = re.search(pattern[p], html)
         p += 1
+
     if m:
         return m.group(1).strip()
     else:
         print "Thread ID not found."
         return ''
+
+def scrapeThreadIDs(html):
+    """Return list of all IDs found in a chunk of HTML
+
+    Note: for user history searches, this includes dupes"""
+    ids = []
+    someid = scrapeThreadID(html)
+    while someid:
+        ids.append(someid)
+        html = html[(html.find(someid)+len(someid)):]
+        someid = scrapeThreadID(html)  
+    return ids 
 
 def scrapeThreadURL(id, html):
     """Return thread URL from str of HTML"""
@@ -196,6 +222,29 @@ def scrapeForumName(html):
     else:
         return ''
 
+def scrapeForumVersion(html):
+    """Returns string containing vB version"""
+    # Trim down to just the contents of the head tag
+    html = html[html.find('<head>'):html.find('</head>')]
+    # Get rid of the contents of the title tag
+    starttitle = html.find('<title>')
+    endtitle = html.find('</title>')
+    html = html[:starttitle] + html[endtitle:]
+    # Now search for vBulletin within the automatically-
+    #   generated code. No user input is considered.
+    start = html.find('vBulletin')
+    if (start > -1):
+        pattern = []
+        pattern.append(r'vBulletin ([0-9\.]+)')
+        pattern.append(r'vBulletin[^0-9]*([0-9\.]+)')
+        m = None
+        p = 0
+        while (not m) and (p < len(pattern)):
+            m = re.search(pattern[p], html[start:start + 20])
+            p += 1
+        if m:
+            return m.group(1)  
+    return ''
 
 def scrapeComment(opening, html, includetags = False):
     """Returns str of html enclosed by comment s"""
@@ -225,4 +274,14 @@ def scrapeComment(opening, html, includetags = False):
     else:
         # html.find() returns -1 if comment isn't found
         return '' 
+
+def scrapeUserAvatar(html):
+    """Return URL pointing at User avatar"""
+    pass
+
+def scrapeUserNumPosts(html):
+    """Return integer number of posts"""
+    pass
+
+
 

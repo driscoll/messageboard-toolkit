@@ -204,3 +204,12 @@ class Thread:
             delta += abs(postdate[i-1] - postdate[i]).seconds
             i += 1
         return (float(delta)/len(postdate))
+
+    def graph(self, style = "bar", format = "ascii"):
+        """Construct graphical representations of Thread data"""
+        # Determine scale 
+        
+        # For each period, count number of posts 
+        # Create graphical representation
+        return g 
+

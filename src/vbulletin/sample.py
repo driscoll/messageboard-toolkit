@@ -14,12 +14,13 @@ url = []
 # Single page thread (as of June 22)
 url.append('http://www.naturallycurly.com/curltalk/showthread.php?t=104226')
 
-thread = []
+localdir = '/data/code/messageboard-toolkit/archive/' 
+archive = vbarchive.Archive(localdir)
 
 for u in url:
-    thread.append(vbthread.Thread(u))
+    archive.addThread(u)
  
-for t in thread:
-    vbarchive.downloadThread(t, '.', '', 'windows')
+archive.update()
+
 
 

@@ -8,12 +8,22 @@ class Forum:
     """vBulletin Forum
     """
 
-    def __init__(self, url = '', name = '', lastupdate = '', thread = {}, user = {}):
+    def __init__(self, 
+                url = '', 
+                name = '', 
+                lastupdate = '', 
+                version = '', 
+                thread = {}, 
+                user = {},
+                jsonstr = '',
+                rawhtml = ''
+                ):
         # TODO implement importJSON method a la Thread, Post
         # TODO should probably be subclassed in a future rev
         self.url = url 
         self.name = name
         self.lastupdate = lastupdate
+        self.version = version
  
         self.thread = {} 
         for id, t in thread.iteritems():
@@ -22,8 +32,9 @@ class Forum:
         
         self.user = {}
         """TODO User class not yet implemented
-        for id, u in user:
-            self.user[id] = vbuser.User(**t)
+        for id, u in user.itermitems():
+            kw = vbutils.convertKeysToStr(u)
+            self.user[id] = vbuser.User(**kw)
         """
 
     def exportDict(self):

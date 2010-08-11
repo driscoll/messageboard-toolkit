@@ -38,6 +38,7 @@ class Archive:
                 localdir = '.', 
                 summary = 'archive.json', 
                 lastupdate = '',
+                platform = 'unix',
                 forum = {}
                 ):
 
@@ -45,6 +46,11 @@ class Archive:
             localdir = '.'
         if not summary:
             summary = 'archive.json'
+
+        if platform in ['unix', 'windows']:
+            self.platform = platform
+        else:
+            self.platform = 'unix'
 
         # Check if localdir exists 
         if not os.access(localdir, os.F_OK):
@@ -56,18 +62,20 @@ class Archive:
         self.lastupdate = lastupdate
         self.forum = forum 
 
-        # Did we receive forum data as an arg? 
+        # Did we receive forum data as an **arg? 
         if forum:
-            # If so, create Forum objs 
+            print "Forum data received as dict obj."
+            # If so, create Forum objs from dict 
             for id, f in forum.iteritems():
-                self.forum[id] = vbforum.Forum(**f)
-            # And attempt to update the local archive on disk
-            self.update()
+                kw = vbutils.convertKeysToStr(f)
+                self.forum[id] = vbforum.Forum(**kw)
         
         # If not, does a summary file exist in localdir?
         elif os.access(os.path.join(localdir, summary), os.F_OK):
             # If so, load forum data from the summary file 
+            print "Reading forum data from JSON summary."
             self.readSummary()
+
         else:
             # TODO try to discover thread data and create summary 
             # 
@@ -140,10 +148,18 @@ class Archive:
         with open(os.path.join(localdir, filename), 'w') as summaryf: 
             json.dump(data, summaryf, indent = 4)
 
-    def update(self):
+    def update(self, platform_ = ''):
         """Download latest version of all threads
             and update the JSON summary file.
         """
+        # Very important that platform_ is set correctly
+        # Filename transformations depend on this setting
+        if not platform_:
+            if self.platform:
+                platform_ = self.platform
+            else:
+                platform_ = 'unix'
+        
         # Loop over each thread in each forum
         #   and download latest data
         for forumid, forumobj in self.forum.iteritems():
@@ -154,7 +170,9 @@ class Archive:
                 #   Maybe we can implement a smarter URL guessing
                 #   heuristic based on other things 
                 #   Even google search? :-?
-                downloadThread(threadobj, self.localdir, platform='windows')
+                if not downloadThread(threadobj, self.localdir, platform = platform_):
+                    print "Failed to download thread %s" % threadobj.title
+                    print "Attempting to proceed anyway ..."
 
         # Sync this Archive object with new data on disk 
         # os.walk gives us an iterator of a dir tree
@@ -199,24 +217,29 @@ class Archive:
                 print "Latest update was on %s" % currentinstance
             elif (lastdir == currentinstance):
                 # We are in the dir of an instance
-                orig_file = 0 
                 # Find an original html page,
                 #   e.g. showthread.php@t=01235.orig
                 # TODO this is vB convention need to be template
-                while not (files[orig_file][:4] == 'show' and files[orig_file][-4:] == 'orig'):
-                    orig_file += 1 
-                print "Found source file: %s" % files[orig_file]
+                try:
+                    for f in files:
+                        print f
+                    orig_file = (f for f in files if (f[:4] == 'show' and f[-4:] == 'orig')).next()
+                    print "Found source file: %s" % orig_file
+                except:
+                    orig_file = ''
+                    print "Source HTML file not found"
+                    break
 
                 # TODO Much easier if subdirs = IDs instead of slugs
                 # TODO Is this something we should change?
-                id = vbutils.findThreadID(files[orig_file])
+                id = vbutils.findThreadID(orig_file)
 
                 # Is there already a thread object?
                 if not id in self.forum[currentforum].thread.keys():
                     # Read the original html
                     subdir = root 
                     print "Attempting to read from %s" % subdir
-                    with open(os.path.join(subdir, files[orig_file]), 'r') as f:
+                    with open(os.path.join(subdir, orig_file), 'r') as f:
                         orig_html = f.read()
 
                     # Find the URL in this HTML 
@@ -249,15 +272,18 @@ class Archive:
             # If not, then create a new Forum object
             self.forum[forumname] = vbforum.Forum(forumname)
 
-    def addThread(self, url = '', rawhtml_ = ''):
+    def addThread(self, url = '', rawhtml_ = '', threadobj = ''):
         """Add a new thread to be tracked by this archive
         """
         # URL or HTML required to addThread in this manner
-        if not url and not rawhtml_:
+        if not (url or rawhtml_ or threadobj):
             return False
 
         # Create Thread object from url
-        newthread = vbthread.Thread(url, rawhtml = rawhtml_)
+        if threadobj:
+            newthread = threadobj
+        else: 
+            newthread = vbthread.Thread(url, rawhtml = rawhtml_)
         
         # Add a Forum object to this Archive
         self._addForum(newthread.forum)
@@ -296,15 +322,25 @@ def constructTargetDirs(thread, localdir, utc = 0):
     # Construct a target directory
     # TODO template this?
     print "Create target directories ..."
-    localsubdirs = [thread.forum, thread.title, date]
-    newdir = localdir
-    for sub in localsubdirs:
-        newdir += '/' + str(sub) 
-        # check if newdir exists
-        if not os.access(newdir, os.F_OK):
-            print "%s doesn't exist. Creating ..." % newdir
-            # if not, create it
-            os.mkdir(newdir)     
+    localsubdirs = [localdir, thread.forum, thread.title, date]
+    newdir = os.path.join(*localsubdirs)
+
+    if os.access(newdir, os.F_OK):
+        print "Target already exists ..."
+    else:
+        print "Creating target dirs ..."
+        try:
+            # makedirs() recursively creates all
+            # needed subdirs
+            # raises error exception if leaf exists
+            # or can't be created
+            os.makedirs(newdir)    
+        except:
+            # because we previously test if leaf
+            # exists, we can be sure that this is
+            # some other error.
+            print "Error: failed to create target dir: %s" % newdir
+            return '' 
     print "Target directory is %s" % newdir
     return newdir
 
@@ -328,8 +364,10 @@ def wgetPage(thread, page, targetdir, platform = 'unix', logfile = ''):
         wget_cmd = "wget -v -nH --cut-dirs=%s -k -K -E -H -p -P %s -N -w 1 --random-wait --no-cache --no-cookies \"%s&page=%s\"" % (subdirs, targetdir, thread.url, page)
 
     # Split wget invocation into list for subprocess
-    args = shlex.split(wget_cmd)
-   
+    # TODO Apparently shlex.split can't take unicode arguments?
+    # Is this going to be a problem in the future?
+    args = shlex.split(str(wget_cmd))
+ 
     # Are we specifying a special logfile location?
     if (logfile != ''):
         args.insert(1, '-a')
@@ -382,8 +420,8 @@ def fixMultiPageLinks(thread, page, targetdir, platform='unix'):
     tempfilename = '.' + infilename + '.tmp'
     # TODO will these forward slashes work on Windows?
     # TODO might need to use os.path module
-    with open((targetdir + '/' + tempfilename),'w') as temppage:
-        with open((targetdir + '/' + infilename),'r') as firstpage:
+    with open(os.path.join(targetdir, tempfilename),'w') as temppage:
+        with open(os.path.join(targetdir, infilename),'r') as firstpage:
             for line in firstpage:
                 
                 # Transform links to pages other than page 1
@@ -409,20 +447,33 @@ def fixMultiPageLinks(thread, page, targetdir, platform='unix'):
 
     # Overwrite the temporary file with the new one
     # (Don't worry: wget created an unchanged version .orig)
-    os.rename(targetdir + '/' + tempfilename, targetdir + '/' + infilename)
+    os.rename(os.path.join(targetdir, tempfilename), os.path.join(targetdir, infilename))
     
     # Assuming success!    
     return 1
 
-def downloadThread(thread, localdir = '.', logfile = '', platform='unix'):
+def downloadThread(thread, localdir = '', logfile = '', platform='unix'):
     """Initiate downloading latest instance of a thread.
     thread: Thread object
     targetdir: String 
     """
-   
+  
+    if not localdir:
+        if self.localdir:
+            localdir = self.localdir
+        else:
+            localdir = '.'
+
     # Construct target directories
     targetdir = constructTargetDirs(thread, localdir)
- 
+    if not targetdir:
+        print "Error creating target dirs. Aborting thread download." 
+        # TODO Should probably raise an error here.
+        return False 
+    
+    print targetdir
+    return 0 
+
     # Loop through pages in thread
     # and download them to the same dir.
     # Wget won't download duplicate files

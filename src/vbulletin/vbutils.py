@@ -16,13 +16,17 @@ def isDate(s):
             return (s[8] == 'T')
     return False
 
-def getDateTime(utc = 0):
+def parseDateTime(t, format = '%Y%m%dT%H%M%S'):
+    """Return datetime object from strf datetime"""
+    return datetime.strptime(t, format)
+
+def getDateTime(utc = 0, format = '%Y%m%dT%H%M%S'):
     """Return machine- and human-readable date-time as string, e.g. 20070304T203217
     """
     if utc:
-        return datetime.utcnow().strftime('%Y%m%dT%H%M%S')
+        return datetime.utcnow().strftime(format)
     else:
-        return datetime.now().strftime('%Y%m%dT%H%M%S')
+        return datetime.now().strftime(format)
 
 def convertDateTime(messydate):
     """Return arbitrary str to formatted datetime, '%Y%m%dT%H%M%S'
@@ -67,9 +71,16 @@ def isValidURL(url):
     
     TODO Janky verification but it's a start
     """
-    if (url.find('showthread') < 0) or (url.find('http://') < 0):
-        return False
-    return True
+    indicators = []
+    indicators.append('showthread')
+    indicators.append('http://')
+    indicators.append('yuku')
+    i = 0
+    found = False
+    while (i < len(indicators)) and not found: 
+        if (url.find(indicators[i]) < 0):
+            found = True
+    return found 
 
 def isValidJSONStr(obj):
     """Check if obj is a str, list, or dict of valid JSON 
